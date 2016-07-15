@@ -114,5 +114,14 @@ static const tdb_opt_value TDB_FALSE __attribute__((unused)) = {.value = 0};
 #define TDB_OPT_CONS_OUTPUT_FORMAT_DIR 0
 #define TDB_OPT_CONS_OUTPUT_FORMAT_PACKAGE 1
 
-#endif /* __TDB_TYPES_H__ */
+/*
+  Filter Operators
+  To be used OR'ed together where the result is any reasonable
+  combination of valid operators.
+*/
+#define TDB_FILTER_EQ 0x0001
+#define TDB_FILTER_NE 0x0002
+#define TDB_FILTER_GT 0x0004
+#define TDB_FILTER_LT 0x0008
 
+#endif /* __TDB_TYPES_H__ */

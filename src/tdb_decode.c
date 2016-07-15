@@ -9,6 +9,48 @@ static inline uint64_t tdb_get_trail_offs(const tdb *db, uint64_t trail_id)
         return ((const uint64_t*)db->toc.data)[trail_id];
 }
 
+/* Returns non-zero if the expression evaluates to true */
+static int evaluate_exp(uint64_t item_a, uint64_t item_b,
+                                uint64_t operator_mask)
+{
+    /* Unpack operators from bitmask giving presidence to exclusive
+     combinations in case of errors by the user,
+     i.e. TDB_FILTER_NE and TDB_FILTER_EQ */
+    switch (operator_mask) {
+        case 0x0000: // No mask value defaults to 0
+        case 0x0001: // TDB_FILTER_EQ
+            if (item_a == item_b)
+                return 1;
+            break;
+        case 0x0002: // TDB_FILTER_NE
+        case 0x0003: // DB_FILTER_EQ | TDB_FILTER_NE
+            if (item_a != item_b)
+                return 1;
+            break;
+        case 0x0004: // TDB_FILTER_GT
+        case 0x0011: // TDB_FILTER_EQ | TDB_FILTER_NE | TDB_FILTER_LT
+            if (item_a > item_b)
+                return 1;
+            break;
+        case 0x0005: // TDB_FILTER_EQ | TDB_FILTER_GT
+        case 0x0010: // TDB_FILTER_NE | TDB_FILTER_LT
+            if (item_a >= item_b)
+                return 1;
+            break;
+        case 0x0006: // TDB_FILTER_NE | TDB_FILTER_GT
+        case 0x0009: // TDB_FILTER_LT | TDB_FILTER_EQ
+            if (item_a <= item_b)
+                return 1;
+            break;
+        case 0x0007: // TDB_FILTER_EQ | TDB_FILTER_NE | TDB_FILTER_GT
+        case 0x0008: // TDB_FILTER_LT
+            if (item_a < item_b)
+                return 1;
+            break;
+    }
+    return 0;
+}
+
 static int event_satisfies_filter(const tdb_item *event,
                                   const tdb_item *filter,
                                   uint64_t filter_len)
@@ -17,25 +59,24 @@ static int event_satisfies_filter(const tdb_item *event,
     while (i < filter_len){
         uint64_t clause_len = filter[i++];
         uint64_t next_clause = i + clause_len;
-        int match = 0;
+        static int match = 0;
         if (next_clause > filter_len)
             return 0;
 
         while (i < next_clause){
-            uint64_t is_negative = filter[i++];
+            uint64_t filter_operator = filter[i++];
             uint64_t filter_item = filter[i++];
             tdb_field field = tdb_item_field(filter_item);
-            if (field){
-                if ((event[field] == filter_item) != is_negative){
-                    match = 1;
-                    break;
-                }
-            } else {
+
+            if (field && evaluate_exp(event[field],filter_item,filter_operator)){
+                match = 1;
+                break;
+            } /*else {
                 if (is_negative) {
                     match = 1;
                     break;
                 }
-            }
+            }*/
         }
         if (!match){
             return 0;
@@ -44,7 +85,6 @@ static int event_satisfies_filter(const tdb_item *event,
     }
     return 1;
 }
-
 
 TDB_EXPORT tdb_cursor *tdb_cursor_new(const tdb *db)
 {
@@ -255,4 +295,3 @@ this is "strategy 3" from
 http://www.greenend.org.uk/rjk/tech/inline.html
 */
 TDB_EXPORT extern const tdb_event *tdb_cursor_next(tdb_cursor *cursor);
-
